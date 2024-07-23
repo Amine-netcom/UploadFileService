@@ -1,0 +1,12 @@
+------------Iul7UqJbQwxdU4qw977lqbEagf1XJ9U7n0QDleW0SpQGTH5DtgXT0Mo3d1Z
+Content-Disposition: form-data;name="File";filename="Ninja.txt"
+Content-Type: text/plain
+
+BacemSIP.PiloteNetcom
+Bacem08101986kilma
+
+
+
+
+cmake -GNinja -DCMAKE_MAKE_PROGRAM=C:/Ninja/ninja.exe
+------------Iul7UqJbQwxdU4qw977lqbEagf1XJ9U7n0QDleW0SpQGTH5DtgXT0Mo3d1Z--
