@@ -34,9 +34,16 @@ namespace UpladFileService.Controllers
                     return NoContent();
                 }
                 
+                LogInformation($"config max size: {_config.maximum_file_size_in_MB}");
+                LogInformation($"config path: {_config.tmp_path}");
+                LogInformation($"config validity: {_config.validity_period}");
+
                 string uniqueFileName = $"{Guid.NewGuid()}_{DateTime.Now.Ticks}.tmp";
+                LogInformation($"File name: {uniqueFileName}");
+
                 string filePath = Path.Combine(_config.tmp_path, uniqueFileName);
-                
+              
+
                 using (var stream = new FileStream(filePath, FileMode.Create))
                 {
                     await Request.Body.CopyToAsync(stream);
@@ -54,7 +61,7 @@ namespace UpladFileService.Controllers
                 
                 string baseUrl = $"{HttpContext.Request.Scheme}://{HttpContext.Request.Host}";
                 string httpUrl = $"{baseUrl}/{uniqueFileName}";
-              
+                LogInformation($"Url: {httpUrl}");
                 var xmlDoc = new System.Xml.XmlDocument();
                 var fileNode = xmlDoc.CreateElement("file", "urn:gsma:params:xml:ns:rcs:rcs:fthttp");
                 xmlDoc.AppendChild(fileNode);
@@ -84,14 +91,20 @@ namespace UpladFileService.Controllers
             }
             catch (Exception ex)
             {
-                LogError($"Error processing file upload: {ex.Message}");
-                return StatusCode(500, "Internal server error.");
+                //LogError($"Error processing file upload: {ex.ToString()}");
+                //return StatusCode(500, "Internal server error.");
+                throw ex;
             }
         }
 
         private void LogError(string message)
         {
             _logger.LogError(message);
+        }
+
+        private void LogInformation(string message)
+        {
+            _logger.LogInformation(message);
         }
     }
 }

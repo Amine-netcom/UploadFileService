@@ -41,7 +41,7 @@ namespace UpladFileService
             }
             else
             {
-                app.UseHsts();
+                //app.UseHsts();
             }
 
             //app.UseHttpsRedirection();
