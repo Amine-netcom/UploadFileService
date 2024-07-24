@@ -17,8 +17,8 @@
     },
     "UpladFileService": {
       "commandName": "Project",
-      "launchBrowser": true,
-      "applicationUrl": "https://localhost:5001;http://localhost:5000",
+      "launchBrowser": false,
+      "applicationUrl": "http://localhost:64815",
       "environmentVariables": {
         "ASPNETCORE_ENVIRONMENT": "Development"
       }
