@@ -2,14 +2,16 @@
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.WebUtilities;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
-using UpladFileService.Model;
+using UploadFileService.Model;
 
-namespace UpladFileService.Controllers
+namespace UploadFileService.Controllers
 {
     [Route("api/[controller]")]
     [ApiController]
@@ -17,11 +19,13 @@ namespace UpladFileService.Controllers
     {
         private readonly ILogger<FileController> _logger;
         private readonly Config _config;
+        private readonly KestrelSettings _kestrelSettings;
 
-        public FileController(ILogger<FileController> logger, IOptions<Config> config)
+        public FileController(ILogger<FileController> logger, IOptions<Config> config, IOptions<KestrelSettings> kestrelSettings)
         {
             _logger = logger;
             _config = config.Value;
+            _kestrelSettings = kestrelSettings.Value;
         }
 
         [HttpPost("upload")]
@@ -36,30 +40,56 @@ namespace UpladFileService.Controllers
                 
                 LogInformation($"config max size: {_config.maximum_file_size_in_MB}");
                 LogInformation($"config path: {_config.tmp_path}");
-                LogInformation($"config validity: {_config.validity_period}");
+                LogInformation($"config validity: {_config.validity_period_days}");
 
-                string uniqueFileName = $"{Guid.NewGuid()}_{DateTime.Now.Ticks}.tmp";
+                var boundary = Request.ContentType.Split(';')[1].Split('=')[1].Trim();
+                var reader = new MultipartReader(boundary, Request.Body);
+
+                var section = await reader.ReadNextSectionAsync();
+                if (section == null)
+                    return BadRequest("File upload failed.");
+
+                var contentDisposition = section.Headers["Content-Disposition"].ToString();
+                var fileName = ParseFileName(contentDisposition);
+                var extension = Path.GetExtension(fileName)?.ToLower() ?? string.Empty;
+                if (string.IsNullOrEmpty(extension))
+                {
+                    extension = ".dat"; // Default extension if none is provided
+                }
+                string fileNameWoEx = Path.GetFileNameWithoutExtension(fileName);
+                string uniqueFileName = "";
+
+                if (string.IsNullOrWhiteSpace(fileNameWoEx))
+                {
+                    uniqueFileName = $"{Guid.NewGuid()}{extension}";
+                }
+                else
+                {
+                    var fileNameRemoveEmptySpace = Regex.Replace(Path.GetFileNameWithoutExtension(fileName), @"\s+", "");
+                    uniqueFileName = $"{Guid.NewGuid()}_{fileNameRemoveEmptySpace}{extension}";
+                }
+
+
                 LogInformation($"File name: {uniqueFileName}");
 
                 string filePath = Path.Combine(_config.tmp_path, uniqueFileName);
-              
-
                 using (var stream = new FileStream(filePath, FileMode.Create))
                 {
-                    await Request.Body.CopyToAsync(stream);
+                    await section.Body.CopyToAsync(stream);
                 }
-                
+
                 var fileInfo = new FileInfo(filePath);
                 long fileSizeInMB = fileInfo.Length / (1024 * 1024);
-                
+
                 if (fileSizeInMB > _config.maximum_file_size_in_MB)
                 {
                     LogError($"Uploaded file size exceeds configured limit: {_config.maximum_file_size_in_MB} MB.");
                     System.IO.File.Delete(filePath);
                     return BadRequest($"Uploaded file size exceeds configured limit: {_config.maximum_file_size_in_MB} MB.");
                 }
-                
-                string baseUrl = $"{HttpContext.Request.Scheme}://{HttpContext.Request.Host}";
+
+                int portServer = _kestrelSettings.Endpoints.Http.PortServer;
+                string baseUrl = $"{HttpContext.Request.Scheme}://{HttpContext.Request.Host.Host}:{portServer}";
                 string httpUrl = $"{baseUrl}/{uniqueFileName}";
                 LogInformation($"Url: {httpUrl}");
                 var xmlDoc = new System.Xml.XmlDocument();
@@ -84,16 +114,15 @@ namespace UpladFileService.Controllers
 
                 var dataNode = xmlDoc.CreateElement("data");
                 dataNode.SetAttribute("url", httpUrl);
-                dataNode.SetAttribute("until", DateTime.UtcNow.AddSeconds(_config.validity_period).ToString("yyyy-MM-ddTHH:mm:ssZ"));
+                dataNode.SetAttribute("until", DateTime.UtcNow.AddDays(_config.validity_period_days).ToString("yyyy-MM-ddTHH:mm:ssZ"));
                 fileInfoNode.AppendChild(dataNode);
 
                 return Content(xmlDoc.OuterXml, "application/xml");
             }
             catch (Exception ex)
             {
-                //LogError($"Error processing file upload: {ex.ToString()}");
-                //return StatusCode(500, "Internal server error.");
-                throw ex;
+                LogError($"Error processing file upload: {ex.ToString()}");
+                return StatusCode(500, "Internal server error.");
             }
         }
 
@@ -106,5 +135,21 @@ namespace UpladFileService.Controllers
         {
             _logger.LogInformation(message);
         }
+
+        private string ParseFileName(string contentDisposition)
+        {
+            var fileName = string.Empty;
+            var segments = contentDisposition.Split(';');
+            foreach (var segment in segments)
+            {
+                if (segment.Trim().StartsWith("filename=", StringComparison.OrdinalIgnoreCase))
+                {
+                    fileName = segment.Split('=')[1].Trim('"').Trim();
+                    break;
+                }
+            }
+            return fileName;
+        }
+
     }
 }

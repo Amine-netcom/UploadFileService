@@ -8,7 +8,7 @@ using Microsoft.AspNetCore.Hosting;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 
-namespace UpladFileService
+namespace UploadFileService
 {
     public class Program
     {
@@ -19,6 +19,8 @@ namespace UpladFileService
 
         public static IWebHostBuilder CreateWebHostBuilder(string[] args) =>
             WebHost.CreateDefaultBuilder(args)
-                .UseStartup<Startup>();
+              .UseStartup<Startup>()
+             .UseWebRoot("wwwroot");
+
     }
 }
